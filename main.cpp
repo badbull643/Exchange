@@ -1,197 +1,109 @@
 #include <bits/stdc++.h>
+#include <cstdint>
 
 /*
 
-<<<<<<< HEAD
-plan out the code here so
-=======
-so clients send orders over tcp a matching engine fills them by price time
-priority,
+so the next part
+is how do i cancel / edit orders so
 
-and market data goes out over udp multicast,
-every order is journaled to disk, so the exchange recovers after a crash
-so this is  the testing file?
 
-build the order book data structures,
-matching logic,
+when an order is inserted into a book,
 
-order id lookup all single threaded ,and in processes,
+keep a refrence too them so
+
+since the orders are indexed by orderid (likely ill use some type of hexadecimal
+too encode the orders but well see) so
+
+
+for order ids use UUID so
+
+
+so i need to write the unit tests for these,
+keeping a refrence so a pointr, keep these contiguously some
+
+refarray["order id"] -> refarray[]
+
+
+map has terrible lookup times since orders will likely overflow then,
+use a map ?
+logn insertion is bad tho so
+
+since its sorted, hashmap nogo since collisions,
+so since queues cant be spliced and reput together maybe a better datastuctureso
+
+lists structure but how should allocation occur so,
+
+since i need erasure bascially so
+
+l1 -> l2 -> l3 -> l4 ...
 so
 
 
+contiguously allocated space,
+so when deletions occur, price levels can be deep
+
+look at the expected price level prallocate a larger size for that price, level
+,
+
+then make sure lists are contiguous ? some
+
+
+so preallocate a larger contiguous region,
+
+since the cache locality of lists is terrible we wanna use a custom list struct
+
+
+(l,r,val) the list object,
+allocate rows, so
+
+
+allocate all together
+
+so preallocate the storage pool too use for the list prior so can reuse the
+std::list so we dont have too recreate the list struct but i think that, i will
+recreate the list so i get a bit more control over the list functions and
+structure too make it easier too parse
+
+so build the preallocated list struct since it should be the fastest so
+
+get the node p
+
+std::vector<Node> pool
 
 so
 
-for the order,
-book
-
-do
-the price indexing by
-
-what
-
-so look a tthe matchine engine, so
-
-
-one order book per symbol ,so
-
-
-
-
-
-order book data structure,
-
-so
-
-
-matching logic, an order ID lookup all single threaded and in-process,
-
-cancel/replace, that raises quna
-reducing quantity keeps the priroty ? so
-
-cancelling the order ?
-the question is waht structure should i use ehre? so
-
-8 symbols configured,
-
-best price first,
-
-in combing order, crosses the spread executes immediatly at the resting orders
-price,
-
-any remaining qunatity on a limit order rests on the book,
-
-should
-makret order ?so
-
-
-
-the key features,
-so
-
-
-
-map is the first data structure i would consider,
-
-so replace an order doesn nothing if you decrease the quantity
-so this
-
-
-
-
-flat array with price levels as an index, array would have too be massive tho?
-
-so the resizing of the range,
-so
-
-
-looking at, the price
-
-for a new price outside teh range resize, the vector which is constly but, once
-book is established, not a problem so preallocate an initial range, so
-
-so when price, goes outside the price range
-
-so the tick matching mechanism so
-
-
-
-
->>>>>>> c1a97d53a5811ab2f68cdaaf955740a1e5ad1919
-
-what does submit return? so
-
-
-
-maybe submit returns the matches? so
-
-so
-
-
-iterate through the price level
-
-
-tick = 1
-smallest unit is 1,
-
-so
-
-
-100.85/tick
-
-price, 10085 -> converted too what ?
-100.85/tick
-
-
-
-price, so
-
-100.85 ->
-
-so
-
-
-for example 100.85 -> 10085
-
-so
-
-
-if we know the tick size then what?
-
-
-
-
-
-
-a buy order against the ask book ,so
-
-lowest buy at price <= limit buy
-
-
-greatest sell at price >= limit ask
-
-
-so we want the smallest value that exists so update a head for each book so
-
-so smallest price first if the smallest price doesnt exist create a new teir,
-the question is heap allocating orders? does it make sense ? store
-
-[0,...,max] -> q1,q2,..,ql
-so
-
-is an optimisation skipping empty sections or maybe thats a compiler
-optimisation? not sure? store
-
-go through one queue
+from this pool just reuse the info hence should work
 
 
 */
 
+struct B_list {};
+
 struct Fills {
-  Fills(uint64_t pay, uint64_t vol, uint64_t buy, uint64_t sell) {
+  Fills(int64_t pay, int64_t vol, int64_t buy, int64_t sell) {
     payment = pay;
     volume = vol;
     buyer_id = buy;
     seller_id = sell;
   }
-  uint64_t payment;
-  uint64_t volume;
-  uint64_t buyer_id;
-  uint64_t seller_id;
+  int64_t payment;
+  int64_t volume;
+  int64_t buyer_id;
+  int64_t seller_id;
 };
 
 struct Order {
   // should be u8 antway so
-  Order(bool type, uint64_t p, uint64_t v, uint64_t c) {
+  Order(bool type, int64_t p, int64_t v, int64_t c) {
     isbid = type;
     price = p;
     volume = v;
     client_order_id = c;
   }
   bool isbid;
-  uint64_t price;
-  uint64_t volume;
-  uint64_t client_order_id;
+  int64_t price;
+  int64_t volume;
+  int64_t client_order_id;
 };
 
 // the price level queue so i need too store pointers too the orders so i can
@@ -199,14 +111,16 @@ struct Order {
 //
 struct PriceLevel {
   std::queue<Order> q;
-  uint64_t sz() { return q.size(); };
+  int64_t sz() { return q.size(); };
 };
 
 class OrderBook {
 public:
-  OrderBook(uint64_t tick, uint64_t symbol_id, uint64_t init_max) {
-    tick = tick;
-    symbol_id = symbol_id;
+  OrderBook(int64_t tick, int64_t symbol_id, int64_t init_max) {
+    this->tick = tick;
+    this->symbol_id = symbol_id;
+    bid_head = 0;
+    ask_head = init_max;
     // initially just resize the price vector,
     ask_price.resize(init_max + 1);
     bid_price.resize(init_max + 1);
@@ -215,75 +129,79 @@ public:
   // orde,Copyright
   std::vector<Fills> submit(Order o) {
     std::vector<Fills> f;
+
+    if (o.price >= ask_price.size() || o.price < 0)
+      return {};
+
     if (o.isbid) {
       // add the bounds check here
       // scan from the back until, we get the min so if the min ask is > but
       // then we create a resting order at price, if the price is empty then we
-      uint64_t cpy = ask_head;
-      for (uint64_t h = cpy; h < ask_price.size(); h++) {
-        if (ask_head > o.price)
+      int64_t limit = o.price == 0 ? ask_price.size() - 1 : o.price;
+      int64_t cpy = ask_head;
+      for (int64_t h = cpy; h < ask_price.size(); h++) {
+        if (h > limit)
           break;
-        while (!ask_price[h].q.empty()) {
-          Order ask_order = ask_price[h].q.front();
-          uint64_t diff = std::min(ask_order.volume, o.volume);
+        while (o.volume > 0 && !ask_price[h].q.empty()) {
+          Order &ask_order = ask_price[h].q.front();
+          int64_t diff = std::min(ask_order.volume, o.volume);
           ask_order.volume -= diff;
           o.volume -= diff;
+
+          f.push_back(Fills(diff * ask_order.price, diff, o.client_order_id,
+                            ask_order.client_order_id));
+
           if (ask_order.volume == 0)
             ask_price[h].q.pop();
-          if (o.volume == 0)
-            break;
           // should return what needs too be transfered and too whom volume
           // transfered adn the price of the transfer
           // fills edits the prices afterwards? is that fine or should it do
           // it in place? in place would require memory allocations first
-
-          f.push_back(Fills(o.client_order_id, ask_order.client_order_id,
-                            diff * ask_order.price, diff));
         }
         // update the askhead checks if the price tier is still emtpy else,
         if (ask_price[ask_head].q.empty())
           ask_head = h;
         // update askhead aswell
-        if (o.volume == 0 && o.price > 0)
+        if (o.volume == 0 && limit > 0)
           break;
       }
       if (o.volume > 0 && o.price > 0) {
         // insert the rest of the order so dont need too do the existance
         // check update the bid head if needed resting market volume? so if the
         // market is empty then the market order is reejct
-        if (o.price > bid_head)
-          bid_head = o.price;
-        bid_price[o.price].q.push(o);
+        if (limit > bid_head)
+          bid_head = limit;
+        bid_price[limit].q.push(o);
       }
     } else {
       // the asks side of the match
       // handle the market order so that works if the price is 0
-      uint64_t cpy = bid_head;
-      for (uint64_t h = cpy; h >= 0; h--) {
-        if (bid_head > o.price)
+      int64_t cpy = bid_head;
+      int64_t limit = o.price == 0 ? 0 : o.price;
+      for (int64_t h = cpy; h >= 0; h--) {
+        if (h < limit)
           break;
-        while (!bid_price[h].q.empty()) {
-          Order bid_order = bid_price[h].q.front();
-          uint64_t diff = std::min(bid_order.volume, o.volume);
+        while (o.volume > 0 && !bid_price[h].q.empty()) {
+          Order &bid_order = bid_price[h].q.front();
+          int64_t diff = std::min(bid_order.volume, o.volume);
           bid_order.volume -= diff;
           o.volume -= diff;
+
+          f.push_back(Fills(diff * bid_order.price, diff,
+                            bid_order.client_order_id, o.client_order_id));
+
           if (bid_order.volume == 0)
             bid_price[h].q.pop();
-          if (o.volume == 0)
-            break;
           // should return what needs too be transfered and too whom volume
           // transfered adn the price of the transfer
           // fills edits the prices afterwards? is that fine or should it do
           // it in place? in place would require memory allocations first
-
-          f.push_back(Fills(bid_order.client_order_id, o.client_order_id,
-                            diff * bid_order.price, diff));
         }
         // update the askhead checks if the price tier is still emtpy else,
         if (bid_price[bid_head].q.empty())
           bid_head = h;
         // update askhead aswell
-        if (o.volume == 0 && o.price > 0)
+        if (o.volume == 0)
           break;
       }
 
@@ -292,9 +210,9 @@ public:
       if (o.volume > 0 && o.price > 0) {
         // insert the rest of the order so dont need too do the existance
         // check update the bid head if needed ,
-        if (o.price < ask_head)
-          ask_head = o.price;
-        ask_price[o.price].q.push(o);
+        if (limit < ask_head)
+          ask_head = limit;
+        ask_price[limit].q.push(o);
       }
     }
 
@@ -305,11 +223,12 @@ private:
   // price levels with the tick we can recover the rest of the array
   std::vector<PriceLevel> bid_price;
   std::vector<PriceLevel> ask_price;
-  uint64_t symbol_id;
-  uint64_t tick;
+  std::vector<int64_t> order_ref;
+  int64_t symbol_id;
+  int64_t tick;
   // the heads point too non empty price tier, so
-  uint64_t bid_head;
-  uint64_t ask_head;
+  int64_t bid_head;
+  int64_t ask_head;
 };
 
 int main() {}
