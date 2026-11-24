@@ -191,12 +191,7 @@ struct Order {
   bool isbid;
   uint64_t price;
   uint64_t volume;
-  uint65_t client_order_id;
-};
-
-class Symbol {
-public:
-private:
+  uint64_t client_order_id;
 };
 
 // the price level queue so i need too store pointers too the orders so i can
@@ -224,58 +219,96 @@ public:
       // add the bounds check here
       // scan from the back until, we get the min so if the min ask is > but
       // then we create a resting order at price, if the price is empty then we
-      // iterate until we find non empty price tier? so
-      while (o.volume > 0) {
-        if (ask_price[ask_head].q.empty()) {
-          // add any remaining volume as an order, so
+      uint64_t cpy = ask_head;
+      for (uint64_t h = cpy; h < ask_price.size(); h++) {
+        if (ask_head > o.price)
           break;
-        }
-        // so while iterating through the queue,
-        // so go too the next price tier maintain an array which stores the
-        // current ask_heads? so delete the order pointer so what do i do with
-        // th ask_price pointer so ? create a destructor for the class so for
-        // large enough price ranges this O(n) scan gets worse though
-        uint64_t cpy = ask_head;
-        for (uint64_t h = ask_head; h < ask_price.size(); h++) {
-          if (ask_head > o.price)
-            break;
-          while (!ask_price[h].q.empty()) {
-            Order ask_order = ask_price[h].q.front();
-            uint64_t diff = std::min(ask_order.volume, o.volume);
-            ask_order.volume -= diff;
-            o.volume -= diff;
-            if (ask_order.volume == 0)
-              ask_price[h].q.pop();
-            if (o.volume == 0)
-              break;
-            // should return what needs too be transfered and too whom volume
-            // transfered adn the price of the transfer,
-            // fills edits the prices afterwards? is that fine or should it do
-            // it in place? in place would require memory allocations first
-
-            f.push_back(Fills(bid_id, ask_id, diff * ask_order->price, diff));
-          }
-          // update the askhead checks if the price tier is still emtpy else,
-          if (ask_price[ask_head].empty())
-            ask_head = h;
-          // update askhead aswell
+        while (!ask_price[h].q.empty()) {
+          Order ask_order = ask_price[h].q.front();
+          uint64_t diff = std::min(ask_order.volume, o.volume);
+          ask_order.volume -= diff;
+          o.volume -= diff;
+          if (ask_order.volume == 0)
+            ask_price[h].q.pop();
           if (o.volume == 0)
             break;
+          // should return what needs too be transfered and too whom volume
+          // transfered adn the price of the transfer
+          // fills edits the prices afterwards? is that fine or should it do
+          // it in place? in place would require memory allocations first
+
+          f.push_back(Fills(o.client_order_id, ask_order.client_order_id,
+                            diff * ask_order.price, diff));
         }
-        if (o.volume > 0) {
+        // update the askhead checks if the price tier is still emtpy else,
+        if (ask_price[ask_head].q.empty())
+          ask_head = h;
+        // update askhead aswell
+        if (o.volume == 0 && o.price > 0)
+          break;
+      }
+      if (o.volume > 0 && o.price > 0) {
+        // insert the rest of the order so dont need too do the existance
+        // check update the bid head if needed resting market volume? so if the
+        // market is empty then the market order is reejct
+        if (o.price > bid_head)
+          bid_head = o.price;
+        bid_price[o.price].q.push(o);
+      }
+    } else {
+      // the asks side of the match
+      // handle the market order so that works if the price is 0
+      uint64_t cpy = bid_head;
+      for (uint64_t h = cpy; h >= 0; h--) {
+        if (bid_head > o.price)
+          break;
+        while (!bid_price[h].q.empty()) {
+          Order bid_order = bid_price[h].q.front();
+          uint64_t diff = std::min(bid_order.volume, o.volume);
+          bid_order.volume -= diff;
+          o.volume -= diff;
+          if (bid_order.volume == 0)
+            bid_price[h].q.pop();
+          if (o.volume == 0)
+            break;
+          // should return what needs too be transfered and too whom volume
+          // transfered adn the price of the transfer
+          // fills edits the prices afterwards? is that fine or should it do
+          // it in place? in place would require memory allocations first
+
+          f.push_back(Fills(bid_order.client_order_id, o.client_order_id,
+                            diff * bid_order.price, diff));
         }
+        // update the askhead checks if the price tier is still emtpy else,
+        if (bid_price[bid_head].q.empty())
+          bid_head = h;
+        // update askhead aswell
+        if (o.volume == 0 && o.price > 0)
+          break;
+      }
+
+      // add a check agains the market orders so it rejects it when the market
+      // is empty so
+      if (o.volume > 0 && o.price > 0) {
+        // insert the rest of the order so dont need too do the existance
+        // check update the bid head if needed ,
+        if (o.price < ask_head)
+          ask_head = o.price;
+        ask_price[o.price].q.push(o);
       }
     }
+
+    return f;
   }
 
 private:
-  // price levels
+  // price levels with the tick we can recover the rest of the array
   std::vector<PriceLevel> bid_price;
   std::vector<PriceLevel> ask_price;
   uint64_t symbol_id;
   uint64_t tick;
   // the heads point too non empty price tier, so
-  uint64_t buy_head;
+  uint64_t bid_head;
   uint64_t ask_head;
 };
 
