@@ -219,6 +219,14 @@ public:
     return f;
   }
 
+  // the main thing is that, so what is the main thing here its the package
+  // loss? so
+
+  bool replace(Order o) {
+    // so use the replace ment order as the input order,
+    return false;
+  }
+
 private:
   // price levels with the tick we can recover the rest of the array
   std::vector<PriceLevel> bid_price;
